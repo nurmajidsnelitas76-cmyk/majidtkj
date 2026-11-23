@@ -66,11 +66,17 @@ const isSupabaseEnabled = Boolean(
 let supabaseAdmin: SupabaseClient | null = null;
 let supabaseAnon: SupabaseClient | null = null;
 
+const anonKeyType = classifySupabaseKey(SUPABASE_ANON_KEY);
+const effectiveAnonKey =
+  anonKeyType !== 'empty' && anonKeyType !== 'placeholder'
+    ? SUPABASE_ANON_KEY
+    : SUPABASE_SERVICE_ROLE_KEY;
+
 if (isSupabaseEnabled) {
   supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY, {
+  supabaseAnon = createClient(SUPABASE_URL, effectiveAnonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 } else if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && serviceRoleKeyType !== 'placeholder') {
@@ -508,6 +514,21 @@ async function startServer() {
           password: String(password),
         });
         if (error || !data.session) {
+          const msg = error?.message || '';
+          if (msg.toLowerCase().includes('email not confirmed')) {
+            res.status(401).json({
+              error:
+                'Email akun belum dikonfirmasi di Supabase Authentication. Aktifkan konfirmasi email atau Auto Confirm di Supabase Dashboard.',
+            });
+            return;
+          }
+          if (msg.toLowerCase().includes('invalid api key')) {
+            res.status(500).json({
+              error:
+                'Konfigurasi SUPABASE_ANON_KEY / VITE_SUPABASE_ANON_KEY tidak valid. Periksa Project Settings → API Keys di Supabase.',
+            });
+            return;
+          }
           res.status(401).json({ error: 'Email atau kata sandi tidak sesuai.' });
           return;
         }
